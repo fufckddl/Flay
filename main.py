@@ -9,9 +9,13 @@ predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 tracker = dlib.correlation_tracker()
 
 # 고양이 귀, 토끼 귀, 미니언 얼굴 오버레이 이미지 로드 (알파 채널 포함)
-cat_ears_image = cv2.imread('image/cat_ears.png', cv2.IMREAD_UNCHANGED)
-rabbit_ears_image = cv2.imread('image/rabbit_ears.png', cv2.IMREAD_UNCHANGED)
-overlay = cv2.imread('./images/minion_face_pic.png', cv2.IMREAD_UNCHANGED)
+cat_ears_image = cv2.imread('./image/cat_ears.png', cv2.IMREAD_UNCHANGED)
+rabbit_ears_image = cv2.imread('./image/rabbit_ears.png', cv2.IMREAD_UNCHANGED)
+if cat_ears_image is None:
+    print("에러: 고양이 귀 이미지가 없습니다.")
+if rabbit_ears_image is None:
+    print("에러: 토끼 귀 이미지가 없습니다.")
+overlay = cv2.imread('./images/minion_face_pic.png', cv2.IMREAD_UNCHANGED)()
 
 # 비디오 캡처 설정
 cap = cv2.VideoCapture(0)
