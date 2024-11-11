@@ -9,14 +9,16 @@ predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 tracker = dlib.correlation_tracker()
 
 # 고양이 귀, 토끼 귀, 미니언 얼굴 오버레이 이미지 로드 (알파 채널 포함)
-cat_ears_image = cv2.imread('./image/cat_ears.png', cv2.IMREAD_UNCHANGED)
-rabbit_ears_image = cv2.imread('./image/rabbit_ears.png', cv2.IMREAD_UNCHANGED)
+cat_ears_image = cv2.imread('./images/cat_ears.png', cv2.IMREAD_UNCHANGED)
+rabbit_ears_image = cv2.imread('./images/rabbit_ears.png', cv2.IMREAD_UNCHANGED)
 if cat_ears_image is None:
     print("에러: 고양이 귀 이미지가 없습니다.")
 if rabbit_ears_image is None:
     print("에러: 토끼 귀 이미지가 없습니다.")
 overlay = cv2.imread('./images/minion_face_pic.png', cv2.IMREAD_UNCHANGED)()
 
+if overlay is None:
+    print("미니언즈 이미지가 없습니다.")
 # 비디오 캡처 설정
 cap = cv2.VideoCapture(0)
 
@@ -62,16 +64,11 @@ def draw_ears(image, ears_image, face):
     x, y, w, h = face.left(), face.top(), face.width(), face.height()
     ears_width = w
     ears_height = int(ears_width * (ears_image.shape[0] / ears_image.shape[1]))
-    ears_x = x
-    ears_y = y - ears_height - 5
-    if ears_x < 0 or ears_y < 0 or ears_x + ears_width > image.shape[1] or ears_y + ears_height > image.shape[0]:
-        return image
-    ears_resized = cv2.resize(ears_image, (ears_width, ears_height))
-    for c in range(0, 3):
-        image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] = \
-            image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] * \
-            (1 - ears_resized[:, :, 3] / 255.0) + \
-            ears_resized[:, :, c] * (ears_resized[:, :, 3] / 255.0)
+    ears_x = x + w // 2  # 얼굴의 중심 x 좌표
+    ears_y = y - ears_height // 2  # 얼굴의 중심 y 좌표 위쪽
+
+    # overlay_transparent 함수를 사용하여 오버레이 적용
+    image = overlay_transparent(image, ears_image, ears_x, ears_y, overlay_size=(ears_width, ears_height))
     return image
 
 # 피쉬아이 필터 함수
