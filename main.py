@@ -11,20 +11,21 @@ tracker = dlib.correlation_tracker()
 # 고양이 귀, 토끼 귀, 미니언 얼굴 오버레이 이미지 로드 (알파 채널 포함)
 cat_ears_image = cv2.imread('./images/cat_ears.png', cv2.IMREAD_UNCHANGED)
 rabbit_ears_image = cv2.imread('./images/rabbit_ears.png', cv2.IMREAD_UNCHANGED)
+overlay = cv2.imread('./images/minion_face_pic.png', cv2.IMREAD_UNCHANGED)
+
 if cat_ears_image is None:
     print("에러: 고양이 귀 이미지가 없습니다.")
 if rabbit_ears_image is None:
     print("에러: 토끼 귀 이미지가 없습니다.")
-overlay = cv2.imread('./images/minion_face_pic.png', cv2.IMREAD_UNCHANGED)()
-
 if overlay is None:
     print("미니언즈 이미지가 없습니다.")
+
 # 비디오 캡처 설정
 cap = cv2.VideoCapture(0)
 
 # 트랙바 및 창 생성 (밝기와 대비 조절용)
-cv2.namedWindow('Face Detection with Filters')
-cv2.createTrackbar('Brightness', 'Face Detection with Filters', 50, 100, lambda x: x)
+cv2.namedWindow('Face Detection with Filters')  # 먼저 창을 생성
+cv2.createTrackbar('Brightness', 'Face Detection with Filters', 50, 100, lambda x: x)  # 그 후에 트랙바 생성
 cv2.createTrackbar('Contrast', 'Face Detection with Filters', 50, 100, lambda x: x)
 
 # 필터 적용 상태 및 모드
@@ -60,15 +61,23 @@ def overlay_transparent(background_img, img_to_overlay_t, x, y, overlay_size=Non
     return bg_img
 
 # 고양이 귀, 토끼 귀 오버레이 함수
-def draw_ears(image, ears_image, face):
-    x, y, w, h = face.left(), face.top(), face.width(), face.height()
-    ears_width = w
-    ears_height = int(ears_width * (ears_image.shape[0] / ears_image.shape[1]))
-    ears_x = x + w // 2  # 얼굴의 중심 x 좌표
-    ears_y = y - ears_height // 2  # 얼굴의 중심 y 좌표 위쪽
+def draw_ears(image, ears_image, face, shape):
+    # Get the positions of the left and right eyebrows
+    left_eyebrow = shape[17:22]
+    right_eyebrow = shape[22:27]
 
-    # overlay_transparent 함수를 사용하여 오버레이 적용
-    image = overlay_transparent(image, ears_image, ears_x, ears_y, overlay_size=(ears_width, ears_height))
+    # Calculate the center point above the eyes for positioning the ears
+    top_left_x = min(left_eyebrow[:, 0])
+    top_right_x = max(right_eyebrow[:, 0])
+    center_x = (top_left_x + top_right_x) // 2
+    center_y = min(np.min(left_eyebrow[:, 1]), np.min(right_eyebrow[:, 1])) - 20  # Adjusted height above eyebrows
+
+    # Set the ear overlay size based on face width
+    face_width = face.width()
+    overlay_size = (int(face_width * 1.5), int(face_width * 1.2))  # Adjust overlay size as needed
+
+    # Apply overlay_transparent function for the ears
+    image = overlay_transparent(image, ears_image, center_x, center_y, overlay_size=overlay_size)
     return image
 
 # 피쉬아이 필터 함수
@@ -128,9 +137,9 @@ while True:
     # 모드에 따른 필터 적용
     if tracking_face:
         if mode == 2:
-            adjusted_frame = draw_ears(adjusted_frame, cat_ears_image, face)
+             adjusted_frame = draw_ears(adjusted_frame, cat_ears_image, face, shape_2d)
         elif mode == 3:
-            adjusted_frame = draw_ears(adjusted_frame, rabbit_ears_image, face)
+            adjusted_frame = draw_ears(adjusted_frame, rabbit_ears_image, face, shape_2d)
         elif mode == 4:
             cv2.rectangle(adjusted_frame, (center_X + 10, center_Y - 30), (center_X + 210, center_Y + 70), (255, 255, 255), -1)
             cv2.putText(adjusted_frame, "Hello!", (center_X + 20, center_Y + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
