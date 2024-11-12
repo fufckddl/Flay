@@ -1,81 +1,54 @@
 import cv2
 import numpy as np
+from overlays import draw_ears, draw_speech_bubble, apply_fisheye_filter
+from loadImages import cat_ears_image, rabbit_ears_image, speech_bubble_image, handsome_overlay, bubble_overlay, gym_overlay
 
-# 오버레이 함수 정의
-def overlay_transparent(background_img, img_to_overlay_t, x, y, overlay_size=None):
-    bg_img = background_img.copy()
-    if overlay_size is not None:
-        img_to_overlay_t = cv2.resize(img_to_overlay_t.copy(), overlay_size)
-    if img_to_overlay_t.shape[2] == 4:
-        b, g, r, a = cv2.split(img_to_overlay_t)
-        mask = a / 255.0
-        mask_inv = 1 - mask
-        h, w = img_to_overlay_t.shape[:2]
-        top_left_x = max(int(x - w / 2), 0)
-        top_left_y = max(int(y - h / 2), 0)
-        roi = bg_img[top_left_y:top_left_y + h, top_left_x:top_left_x + w]
-        if roi.shape[:2] != (h, w):
-            h, w = roi.shape[:2]
-            img_to_overlay_t = cv2.resize(img_to_overlay_t, (w, h))
-            mask = cv2.resize(mask, (w, h))
-            mask_inv = cv2.resize(mask_inv, (w, h))
-        for c in range(3):
-            roi[:, :, c] = (mask_inv * roi[:, :, c] + mask * img_to_overlay_t[:, :, c])
-        bg_img[top_left_y:top_left_y + h, top_left_x:top_left_x + w] = roi
-    return bg_img
+def create_mask(overlay):
+    gray_overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(gray_overlay, 240, 255, cv2.THRESH_BINARY_INV)
+    return mask
 
-def draw_ears(frame, ear_type, face, shape):
-    if ear_type == 'cat':
-        ears_image = cv2.imread('./images/cat_ears.png', cv2.IMREAD_UNCHANGED)
-    elif ear_type == 'rabbit':
-        ears_image = cv2.imread('./images/rabbit_ears.png', cv2.IMREAD_UNCHANGED)
-    else:
-        return frame  # If unrecognized type, return the original frame
+def resize_overlay(face_width, overlay):
+    scale_factor = face_width / overlay.shape[1]
+    new_size = (int(overlay.shape[1] * scale_factor), int(overlay.shape[0] * scale_factor))
+    return cv2.resize(overlay, new_size, interpolation=cv2.INTER_AREA)
 
-    if ears_image is None:
-        print("Error: Unable to load ear images.")
-        return frame
+def overlay_image(img, overlay, x, y, mask):
+    h, w = overlay.shape[:2]
+    if x + w > img.shape[1] or y + h > img.shape[0] or x < 0 or y < 0:
+        return img
+    roi = img[y:y+h, x:x+w]
+    img[y:y+h, x:x+w] = np.where(mask[:, :, np.newaxis] == 0, roi, overlay)
+    return img
 
-    # 얼굴 중앙 계산 (코 대신 얼굴 영역의 중심을 사용)
-    center_x = int((face.left() + face.right()) / 2)
-    center_y = int((face.top() + face.bottom()) / 2)
-
-    # 귀 위치를 이마보다 위쪽으로 조정 (이마 위치가 아니라 얼굴의 top 위치 기준)
-    ear_offset_y = int(face.height() * 0.4)  # 귀를 더 위로 올리기 위한 큰 오프셋 (상단으로 더 많이 이동)
-    adjusted_center_y = face.top() + ear_offset_y    # 얼굴의 상단 위치에서 오프셋 적용
-
-    # 귀 이미지를 얼굴 크기에 맞게 조정 (이미지 크기 축소)
-    overlay_size = (int(face.width() * 1.5), int(face.height() * 0.6 ))  # 귀 이미지 크기 조정 (얼굴 크기에 비례하여 축소)
-
-    # 조정된 크기와 위치로 귀 이미지 오버레이
-    return overlay_transparent(frame, ears_image, center_x, adjusted_center_y, overlay_size=overlay_size)
-
-
-def apply_fisheye_filter(frame, center, radius):
-    map_x, map_y = np.meshgrid(np.arange(frame.shape[1]), np.arange(frame.shape[0]))
-    distance = np.sqrt((map_x - center[0]) ** 2 + (map_y - center[1]) ** 2)
-    
-    # 왜곡 반경 설정: 왜곡이 얼굴 영역에만 적용되도록 설정
-    mask = distance <= radius
-    distortion_factor = distance / radius
-    distortion_factor[mask] = np.minimum(distortion_factor[mask], 1)  # 왜곡 강도 제한
-    
-    # 왜곡된 좌표 계산
-    map_x[mask] = center[0] + (map_x[mask] - center[0]) * distortion_factor[mask]
-    map_y[mask] = center[1] + (map_y[mask] - center[1]) * distortion_factor[mask]
-
-    # 왜곡된 이미지 생성
-    distorted_face = cv2.remap(frame, map_x.astype(np.float32), map_y.astype(np.float32), interpolation=cv2.INTER_LINEAR)
-    
-    # 얼굴 마스크 설정: 왜곡된 얼굴 영역만 처리
-    face_mask = np.zeros_like(frame[:, :, 0], dtype=np.uint8)
-    cv2.circle(face_mask, center, radius, 255, -1)  # 원형 마스크 적용
-    
-    face_mask_inv = cv2.bitwise_not(face_mask)
-    
-    # 왜곡된 부분과 원본 부분을 합성
-    distorted_face_blurred = cv2.bitwise_and(distorted_face, distorted_face, mask=face_mask)
-    original_face = cv2.bitwise_and(frame, frame, mask=face_mask_inv)
-    
-    return cv2.add(distorted_face_blurred, original_face)
-
+def apply_filter_mode(image, mode, current_overlay, use_text_overlay, face, landmarks, face_width):
+    if mode in [2, 3, 4, 5]:
+        current_overlay = None
+        use_text_overlay = False
+        if mode == 2:
+            image = draw_ears(image, cat_ears_image, landmarks)
+        elif mode == 3:
+            image = draw_ears(image, rabbit_ears_image, landmarks)
+        elif mode == 4:
+            image = draw_speech_bubble(image, speech_bubble_image, landmarks, text="Hello!")
+        elif mode == 5:
+            # 얼굴의 중심과 반경을 계산하여 fisheye 필터 적용
+            center = (face.left() + face_width // 2, face.top() + face_width // 2)  # 얼굴 중심 계산
+            radius = face_width // 2  # 얼굴 너비의 절반을 반경으로 설정
+            image = apply_fisheye_filter(image, center, radius)
+    elif mode in [6, 7, 8, 9]:
+        if use_text_overlay:
+            balloon_text = "why so serious...."
+            (text_width, text_height), baseline = cv2.getTextSize(balloon_text, cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 2, 2)
+            x_offset = face.left() + (face_width - text_width) // 2
+            y_offset = face.top() - text_height - 10
+            cv2.putText(image, balloon_text, (x_offset, y_offset), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 2, (0, 0, 255), 2)
+        elif current_overlay is not None:
+            resized_overlay = resize_overlay(face_width, current_overlay)
+            mask = create_mask(resized_overlay)
+            overlay_x = face.right() - 10
+            overlay_y = face.top() - resized_overlay.shape[0]
+            overlay_x = min(overlay_x, image.shape[1] - resized_overlay.shape[1])
+            overlay_y = max(overlay_y, 0)
+            image = overlay_image(image, resized_overlay, overlay_x, overlay_y, mask)
+    return image
