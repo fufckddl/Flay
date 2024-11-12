@@ -2,25 +2,32 @@ import cv2
 import numpy as np
 
 def draw_ears(image, ears_image, landmarks):
+    # 얼굴 랜드마크에서 눈 위치 가져오기
     left_eye = (landmarks.part(36).x, landmarks.part(36).y)
     right_eye = (landmarks.part(45).x, landmarks.part(45).y)
     mid_eye_x = (left_eye[0] + right_eye[0]) // 2
     mid_eye_y = (left_eye[1] + right_eye[1]) // 2
 
+    # 귀 이미지 크기 비율 계산
     ears_width = abs(left_eye[0] - right_eye[0]) * 2
     ears_height = int(ears_width * (ears_image.shape[0] / ears_image.shape[1]))
     ears_x = mid_eye_x - (ears_width // 2)
     ears_y = mid_eye_y - ears_height - 20
 
-    if ears_x < 0 or ears_y < 0 or ears_x + ears_width > image.shape[1] or ears_y + ears_height > image.shape[0]:
-        return image
+    # 귀 이미지가 화면 범위를 벗어나지 않도록 제한
+    ears_x = max(0, min(ears_x, image.shape[1] - ears_width))
+    ears_y = max(0, min(ears_y, image.shape[0] - ears_height))
 
+    # 귀 이미지 크기 조정
     ears_resized = cv2.resize(ears_image, (ears_width, ears_height))
+
+    # 귀 이미지를 얼굴 위에 오버레이
     for c in range(0, 3):
         image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] = \
             image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] * \
             (1 - ears_resized[:, :, 3] / 255.0) + \
             ears_resized[:, :, c] * (ears_resized[:, :, 3] / 255.0)
+    
     return image
 
 def draw_speech_bubble(image, bubble_image, landmarks, text="Hello!"):
