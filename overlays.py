@@ -53,31 +53,25 @@ def draw_speech_bubble(image, bubble_image, landmarks, text="Hello!"):
     return image
 
 def apply_fisheye_filter(frame, center, radius):
-    map_x, map_y = np.meshgrid(np.arange(frame.shape[1]), np.arange(frame.shape[0]))
+    # 맵 생성 시 필터가 적용될 반경 안의 좌표만 계산
+    map_x, map_y = np.meshgrid(
+        np.arange(center[0] - radius, center[0] + radius),
+        np.arange(center[1] - radius, center[1] + radius)
+    )
+    
+    # 거리 계산 및 왜곡 강도 조정
     distance = np.sqrt((map_x - center[0]) ** 2 + (map_y - center[1]) ** 2)
-    
-    # 왜곡 반경 설정: 왜곡이 얼굴 영역에만 적용되도록 설정
     mask = distance <= radius
-    distortion_factor = distance / radius
-    distortion_factor[mask] = np.minimum(distortion_factor[mask], 1)  # 왜곡 강도 제한
+    distortion_factor = np.minimum(distance / radius, 1)
     
-    # 왜곡된 좌표 계산
-    map_x[mask] = center[0] + (map_x[mask] - center[0]) * distortion_factor[mask]
-    map_y[mask] = center[1] + (map_y[mask] - center[1]) * distortion_factor[mask]
-
-    # 왜곡된 이미지 생성
-    distorted_face = cv2.remap(frame, map_x.astype(np.float32), map_y.astype(np.float32), interpolation=cv2.INTER_LINEAR)
+    # 필요한 부분만 왜곡하여 적용
+    map_x = (center[0] + (map_x - center[0]) * distortion_factor).astype(np.float32)
+    map_y = (center[1] + (map_y - center[1]) * distortion_factor).astype(np.float32)
     
-    # 얼굴 마스크 설정: 왜곡된 얼굴 영역만 처리
-    face_mask = np.zeros_like(frame[:, :, 0], dtype=np.uint8)
-    cv2.circle(face_mask, center, radius, 255, -1)  # 원형 마스크 적용
+    distorted_face = cv2.remap(frame, map_x, map_y, interpolation=cv2.INTER_LINEAR)
     
-    face_mask_inv = cv2.bitwise_not(face_mask)
-    
-    # 왜곡된 부분과 원본 부분을 합성
-    distorted_face_blurred = cv2.bitwise_and(distorted_face, distorted_face, mask=face_mask)
-    original_face = cv2.bitwise_and(frame, frame, mask=face_mask_inv)
-    
-    return cv2.add(distorted_face_blurred, original_face)
+    # 원본과 왜곡된 부분 합성
+    frame[center[1] - radius:center[1] + radius, center[0] - radius:center[0] + radius] = distorted_face
+    return frame
 
 

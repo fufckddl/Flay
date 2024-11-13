@@ -7,6 +7,7 @@ from utils import apply_filter_mode
 from loadImages import cat_ears_image, rabbit_ears_image, speech_bubble_image, handsome_overlay, bubble_overlay, gym_overlay
 from loadBackground import beach_image
 from loadPredictor import predictor, detector
+from save import savePic
 
 # 비디오 캡처 초기화
 cap = cv2.VideoCapture(0)
@@ -71,16 +72,20 @@ for (text, btn_bgmode) in bg_buttons:
     button = tk.Button(background_button_frame, text=text, command=lambda m=btn_bgmode: select_background(m))
     button.pack(side="left", padx=5, pady=5)  # 버튼을 왼쪽 정렬로 배치, 간격 조절
 
+# 전역 변수로 얼굴 정보 저장
+current_face = None
+current_landmarks = None
+current_face_width = 0
+
 # 비디오 화면 업데이트 함수
 def update_video():
+    global current_face, current_landmarks, current_face_width
     ret, image = cap.read()  # 현재 비디오 프레임을 읽기
     if not ret:
         return
 
     # 비디오 프레임 크기 조정
     image = cv2.resize(image, (640, 400))
-    image = cv2.flip(image, 1)  # 좌우 반전 (거울 모드)
-
     # 배경 블러가 선택된 경우 apply_background_blur 함수 호출
     if background_mode.get() == 2:
         image = apply_background_blur(image)
@@ -91,12 +96,22 @@ def update_video():
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # 얼굴 탐지에 사용할 그레이스케일 이미지 생성
     faces = detector(gray)  # 얼굴 탐지
 
+    # 필터를 적용할 때 필요한 얼굴 정보
+    current_face = None
+    current_landmarks = None
+    current_face_width = 0
+
     # 탐지된 얼굴 각각에 대해 필터 적용
     for face in faces:
-        landmarks = predictor(gray, face)  # 얼굴 랜드마크 예측
-        face_width = face.right() - face.left()  # 얼굴 너비 계산
-        # 필터 적용 함수 호출하여 선택된 모드와 오버레이를 적용
-        image = apply_filter_mode(image, filter_mode.get(), current_overlay, use_text_overlay.get(), face, landmarks, face_width)
+        current_landmarks = predictor(gray, face)  # 얼굴 랜드마크 예측
+        current_face_width = face.right() - face.left()  # 얼굴 너비 계산
+        # 첫 번째 얼굴만 사용할 경우 current_face = face[0]로 설정할 수 있음
+        current_face = face
+        break
+
+    # 필터 적용 함수 호출하여 선택된 모드와 오버레이를 적용
+    if current_face is not None:
+        image = apply_filter_mode(image, filter_mode.get(), current_overlay, use_text_overlay.get(), current_face, current_landmarks, current_face_width)
 
     # OpenCV 이미지를 tkinter에서 표시할 수 있도록 변환
     cv2image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
@@ -107,6 +122,7 @@ def update_video():
 
     # 주기적으로 업데이트 (20ms마다 update_video 호출)
     video_label.after(20, update_video)
+
 
 # 비디오 화면을 표시할 레이블 생성
 video_label = tk.Label(root)
@@ -120,6 +136,11 @@ def on_closing():
 # 종료 버튼 생성 및 배치
 exit_button = tk.Button(root, text="종료", command=on_closing)
 exit_button.pack()
+
+# 촬영 버튼 클릭 시 호출되는 함수
+save_button = tk.Button(root, text="촬영", command=lambda: savePic(apply_filter_mode(cap.read()[1], filter_mode.get(), current_overlay, use_text_overlay.get(), current_face, current_landmarks, current_face_width), './savePictures') if cap.read()[0] else print("Error: Could not capture frame."))
+save_button.pack()
+
 
 # 비디오 업데이트 시작
 update_video()
