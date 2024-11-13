@@ -137,8 +137,43 @@ def on_closing():
 exit_button = tk.Button(root, text="종료", command=on_closing)
 exit_button.pack()
 
+
 # 촬영 버튼 클릭 시 호출되는 함수
-save_button = tk.Button(root, text="촬영", command=lambda: savePic(apply_filter_mode(cap.read()[1], filter_mode.get(), current_overlay, use_text_overlay.get(), current_face, current_landmarks, current_face_width), './savePictures') if cap.read()[0] else print("Error: Could not capture frame."))
+def capture_frame():
+    ret, image = cap.read()  # 현재 비디오 프레임을 읽기
+    if not ret:
+        print("Error: Could not capture frame.")
+        return
+
+    # 배경 필터 적용
+    if background_mode.get() == 2:
+        image = apply_background_blur(image)
+    elif background_mode.get() == 3:
+        image = apply_background_with_image(image, beach_image)
+
+    # 얼굴 탐지 및 필터 적용
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    faces = detector(gray)
+    current_face = None
+    current_landmarks = None
+    current_face_width = 0
+
+    # 얼굴 탐지
+    for face in faces:
+        current_landmarks = predictor(gray, face)  # 얼굴 랜드마크 예측
+        current_face_width = face.right() - face.left()  # 얼굴 너비 계산
+        current_face = face
+        break
+
+    # 필터 적용
+    if current_face is not None:
+        image = apply_filter_mode(image, filter_mode.get(), current_overlay, use_text_overlay.get(), current_face, current_landmarks, current_face_width)
+
+    # 필터가 적용된 이미지를 저장
+    savePic(image, './savePictures')
+
+# 촬영 버튼 생성
+save_button = tk.Button(root, text="촬영", command=capture_frame)
 save_button.pack()
 
 
