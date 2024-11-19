@@ -2,15 +2,14 @@ import cv2
 import os
 
 # 이미지 경로 설정
-image_path = './images/'
 
 # 이미지 파일들 로드
-cat_ears_image = cv2.imread(os.path.join(image_path, 'cat_ears.png'), cv2.IMREAD_UNCHANGED)
-rabbit_ears_image = cv2.imread(os.path.join(image_path, 'rabbit_ears.png'), cv2.IMREAD_UNCHANGED)
-speech_bubble_image = cv2.imread(os.path.join(image_path, 'speech_bubble.png'), cv2.IMREAD_UNCHANGED)
-handsome_overlay = cv2.imread(os.path.join(image_path, 'handsome.png'))
-bubble_overlay = cv2.imread(os.path.join(image_path, 'work.png'))
-gym_overlay = cv2.imread(os.path.join(image_path, 'gym.png'))
+cat_ears_image = cv2.imread(os.path.join('cat_ears.png'), cv2.IMREAD_UNCHANGED)
+rabbit_ears_image = cv2.imread(os.path.join('rabbit_ears.png'), cv2.IMREAD_UNCHANGED)
+speech_bubble_image = cv2.imread(os.path.join('speech_bubble.png'), cv2.IMREAD_UNCHANGED)
+handsome_overlay = cv2.imread(os.path.join('handsome.png'))
+bubble_overlay = cv2.imread(os.path.join('work.png'))
+gym_overlay = cv2.imread(os.path.join('gym.png'))
 
 # 이미지 로드 확인
 if cat_ears_image is None:
