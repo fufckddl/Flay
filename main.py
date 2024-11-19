@@ -28,46 +28,6 @@ class VideoWindow(QMainWindow):
         self.current_overlay = None
         self.use_text_overlay = False
 
-<<<<<<< HEAD
-
-# 촬영 버튼 클릭 시 호출되는 함수
-def capture_frame():
-    ret, image = cap.read()  # 현재 비디오 프레임을 읽기
-    if not ret:
-        print("Error: Could not capture frame.")
-        return
-
-    # 배경 필터 적용
-    if background_mode.get() == 2:
-        image = apply_background_blur(image)
-    elif background_mode.get() == 3:
-        image = apply_background_with_image(image, beach_image)
-
-    # 얼굴 탐지 및 필터 적용
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = detector(gray)
-    current_face = None
-    current_landmarks = None
-    current_face_width = 0
-
-    # 얼굴 탐지
-    for face in faces:
-        current_landmarks = predictor(gray, face)  # 얼굴 랜드마크 예측
-        current_face_width = face.right() - face.left()  # 얼굴 너비 계산
-        current_face = face
-        break
-
-    # 필터 적용
-    if current_face is not None:
-        image = apply_filter_mode(image, filter_mode.get(), current_overlay, use_text_overlay.get(), current_face, current_landmarks, current_face_width)
-
-    # 필터가 적용된 이미지를 저장
-    savePic(image, './savePictures')
-
-# 촬영 버튼 생성
-save_button = tk.Button(root, text="촬영", command=capture_frame)
-save_button.pack()
-=======
     def init_ui(self):
         self.setWindowTitle("필터카메라")
         self.setGeometry(100, 100, 800, 600)
@@ -197,7 +157,6 @@ save_button.pack()
     def closeEvent(self, event):
         self.cap.release()
         super().closeEvent(event)
->>>>>>> 6c92faa96d3c7c9a21f9e0f0be78894cdd39dfe7
 
 
 if __name__ == "__main__":
