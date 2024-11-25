@@ -1,5 +1,6 @@
 import dlib
 import mediapipe as mp
+import cv2
 
 # 얼굴 탐지기와 랜드마크 예측기 초기화
 detector = dlib.get_frontal_face_detector()

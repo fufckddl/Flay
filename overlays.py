@@ -1,129 +1,135 @@
 import cv2
 import numpy as np
 
-# 얼굴 랜드마크를 기준으로 귀 이미지를 얼굴 위에 그리는 함수
-def draw_ears(image, ears_image, landmarks):
-    # 얼굴 크기 계산을 위한 랜드마크 포인트
-    left_eye = landmarks.part(36)  # 왼쪽 눈의 왼쪽 끝점
-    right_eye = landmarks.part(45)  # 오른쪽 눈의 오른쪽 끝점
-    left_face = landmarks.part(0)   # 얼굴 왼쪽 끝
-    right_face = landmarks.part(16) # 얼굴 오른쪽 끝
-    
-    # 얼굴 전체 너비 계산
-    face_width = right_face.x - left_face.x
-    
-    # 귀 이미지 크기 조정 (얼굴 너비에 비례)
-    ears_width = int(face_width * 1.2)  # 얼굴 너비의 1.2배
+# 부드럽게 처리하기 위한 코드추가
+landmarks_smoothing_data = {}
+smoothing_factor = 0.2  # 스무딩 강도 (0.0~1.0)
+
+# 여러명이 부드럽게 처리되기 위해 함수 추가
+def get_face_id(face):
+    x_center = (face.left() + face.right()) // 2
+    y_center = (face.top() + face.bottom()) // 2
+    return hash((x_center, y_center))
+
+def smooth_landmarks(current_landmarks, face_id):
+    global landmarks_smoothing_data, smoothing_factor
+
+    if face_id not in landmarks_smoothing_data:
+        # 처음 감지된 얼굴의 경우 초기화
+        landmarks_smoothing_data[face_id] = current_landmarks
+        return current_landmarks
+
+    previous_landmarks = landmarks_smoothing_data[face_id]
+    smoothed_landmarks = [
+        (
+            int(previous_landmarks[i][0] * (1 - smoothing_factor) + current_landmarks[i][0] * smoothing_factor),
+            int(previous_landmarks[i][1] * (1 - smoothing_factor) + current_landmarks[i][1] * smoothing_factor),
+        )
+        for i in range(len(current_landmarks))
+    ]
+    # 스무딩된 랜드마크 저장
+    landmarks_smoothing_data[face_id] = smoothed_landmarks
+    return smoothed_landmarks
+
+
+def draw_ears_with_nose(image, ears_image, nose_image, landmarks, face):
+    # 얼굴 ID 생성
+    face_id = get_face_id(face)
+
+    # 랜드마크를 (x, y) 리스트로 변환
+    current_landmarks = [(landmarks.part(i).x, landmarks.part(i).y) for i in range(68)]
+
+    # 스무딩 적용
+    smoothed_landmarks = smooth_landmarks(current_landmarks, face_id)
+
+    # 얼굴 랜드마크에서 눈 위치 가져오기
+    left_eye = smoothed_landmarks[36]
+    right_eye = smoothed_landmarks[45]
+    mid_eye_x = (left_eye[0] + right_eye[0]) // 2
+    mid_eye_y = (left_eye[1] + right_eye[1]) // 2
+
+    # 귀 이미지 크기 비율 계산
+    ears_width = abs(left_eye[0] - right_eye[0]) * 2
     ears_height = int(ears_width * (ears_image.shape[0] / ears_image.shape[1]))
-    
-    # 귀의 위치 계산
-    nose_bridge = landmarks.part(27)  # 코 브릿지
-    ears_x = nose_bridge.x - (ears_width // 2)
-    
-    # 얼굴 상단에서 더 위로 올리기 위해 눈썹 위치를 기준으로 설정
-    left_eyebrow = landmarks.part(19)  # 왼쪽 눈썹
-    right_eyebrow = landmarks.part(24) # 오른쪽 눈썹
-    eyebrow_y = min(left_eyebrow.y, right_eyebrow.y)  # 더 높은 눈썹의 y 좌표
-    ears_y = eyebrow_y - int(ears_height * 1.0)  # 눈썹에서 위로 올림
-    
-    try:
-        # 귀 이미지 크기 조정
-        ears_resized = cv2.resize(ears_image, (ears_width, ears_height))
-        
-        # 이미지 경계 확인 및 조정
-        if ears_x < 0:
-            ears_x = 0
-        if ears_x + ears_width > image.shape[1]:
-            ears_width = image.shape[1] - ears_x
-            ears_resized = cv2.resize(ears_image, (ears_width, ears_height))
-            
-        if ears_y < 0:
-            # 상단이 잘리는 경우 이미지의 아래 부분만 표시
-            diff = abs(ears_y)
-            ears_y = 0
-            ears_resized = ears_resized[diff:, :]
-            ears_height = ears_resized.shape[0]
-            
-        if ears_y + ears_height > image.shape[0]:
-            ears_height = image.shape[0] - ears_y
-            ears_resized = cv2.resize(ears_resized, (ears_width, ears_height))
-        
-        # 알파 채널이 있는 경우에만 마스크 적용
-        if ears_resized.shape[2] == 4:
-            # 알파 채널 기반으로 귀 이미지 오버레이
-            for c in range(0, 3):  # BGR 채널
-                image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] = \
-                    image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] * \
-                    (1 - ears_resized[:, :, 3] / 255.0) + \
-                    ears_resized[:, :, c] * (ears_resized[:, :, 3] / 255.0)
-    
-    except Exception as e:
-        pass  # 에러 발생 시 현재 프레임 스킵
-    
+    ears_x = mid_eye_x - (ears_width // 2)
+    ears_y = mid_eye_y - ears_height - 20
+
+    # 귀 이미지가 화면 범위를 벗어나지 않도록 제한
+    ears_x = max(0, min(ears_x, image.shape[1] - ears_width))
+    ears_y = max(0, min(ears_y, image.shape[0] - ears_height))
+
+    # 귀 이미지 크기 조정
+    ears_resized = cv2.resize(ears_image, (ears_width, ears_height))
+
+    # 귀 이미지를 얼굴 위에 오버레이
+    for c in range(0, 3):
+        image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] = \
+            image[ears_y:ears_y + ears_height, ears_x:ears_x + ears_width, c] * \
+            (1 - ears_resized[:, :, 3] / 255.0) + \
+            ears_resized[:, :, c] * (ears_resized[:, :, 3] / 255.0)
+
+    # 코 필터 추가
+    nose_tip = smoothed_landmarks[30]
+    nose_width = int(ears_width * 0.5)
+    nose_height = int(nose_width * (nose_image.shape[0] / nose_image.shape[1]))
+    nose_x = nose_tip[0] - nose_width // 2
+    nose_y = nose_tip[1] - nose_height // 2
+
+    # 코 이미지 크기 조정
+    nose_resized = cv2.resize(nose_image, (nose_width, nose_height))
+
+    # 코 이미지를 얼굴 위에 오버레이
+    for c in range(0, 3):
+        image[nose_y:nose_y + nose_height, nose_x:nose_x + nose_width, c] = \
+            image[nose_y:nose_y + nose_height, nose_x:nose_x + nose_width, c] * \
+            (1 - nose_resized[:, :, 3] / 255.0) + \
+            nose_resized[:, :, c] * (nose_resized[:, :, 3] / 255.0)
+
     return image
 
-# 말풍선 이미지를 얼굴 위에 오버레이하고 텍스트를 삽입하는 함수
+
 def draw_speech_bubble(image, bubble_image, landmarks, text="Hello!"):
-    # 얼굴 랜드마크에서 코의 위치를 가져옵니다.
     nose_top = (landmarks.part(30).x, landmarks.part(30).y)
-    
-    # 말풍선 위치를 코 위쪽에 배치합니다.
     bubble_x = nose_top[0] + 20
     bubble_y = nose_top[1] - 160
 
-    # 말풍선 이미지를 크기에 맞게 조정
     bubble_resized = cv2.resize(bubble_image, (150, 80))
     bubble_height, bubble_width = bubble_resized.shape[:2]
 
-    # 말풍선이 이미지 밖으로 나가지 않도록 제한
     if bubble_x + bubble_width > image.shape[1] or bubble_y + bubble_height > image.shape[0]:
         return image
 
-    # 말풍선 이미지를 얼굴 위에 겹쳐서 오버레이
-    for c in range(0, 3):  # BGR 색상 채널에 대해 반복 (알파 채널 제외)
+    for c in range(0, 3):
         image[bubble_y:bubble_y + bubble_height, bubble_x:bubble_x + bubble_width, c] = \
             image[bubble_y:bubble_y + bubble_height, bubble_x:bubble_x + bubble_width, c] * \
             (1 - bubble_resized[:, :, 3] / 255.0) + \
-            bubble_resized[:, :, c] * (bubble_resized[:, :, 3] / 255.0)  # 알파 채널을 이용해 이미지를 합성
-
-    # 말풍선 내에 텍스트를 추가
-    text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)  # 텍스트 크기 계산
-    text_x = bubble_x + (bubble_width - text_size[0]) // 2  # 텍스트 x 좌표 계산
-    text_y = bubble_y + (bubble_height + text_size[1]) // 2  # 텍스트 y 좌표 계산
-    
-    # 텍스트 삽입
+            bubble_resized[:, :, c] * (bubble_resized[:, :, 3] / 255.0)
+    text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+    text_x = bubble_x + (bubble_width - text_size[0]) // 2
+    text_y = bubble_y + (bubble_height + text_size[1]) // 2
     cv2.putText(image, text, (bubble_x + 10, bubble_y + 45), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-
     return image
 
-# 얼굴에 어안렌즈(피시아이) 효과를 적용하는 함수
 def apply_fisheye_filter(frame, center, radius):
-    # 원본 이미지 크기에서 x, y 좌표를 그리드 형태로 생성
-    map_x, map_y = np.meshgrid(np.arange(frame.shape[1]), np.arange(frame.shape[0]))
-    
-    # 각 픽셀의 중심으로부터의 거리를 계산
+    # 맵 생성 시 필터가 적용될 반경 안의 좌표만 계산
+    map_x, map_y = np.meshgrid(
+        np.arange(center[0] - radius, center[0] + radius),
+        np.arange(center[1] - radius, center[1] + radius)
+    )
+
+    # 거리 계산 및 왜곡 강도 조정
     distance = np.sqrt((map_x - center[0]) ** 2 + (map_y - center[1]) ** 2)
+    mask = distance <= radius
+    distortion_factor = np.minimum(distance / radius, 1)
 
-    # 왜곡 반경 설정: 반경 내의 영역만 왜곡 효과를 적용
-    mask = distance <= radius  # 왜곡이 적용될 영역 마스크 생성
-    distortion_factor = distance / radius  # 왜곡 강도 계산
-    distortion_factor[mask] = np.minimum(distortion_factor[mask], 1)  # 왜곡 강도를 1로 제한
+    # 필요한 부분만 왜곡하여 적용
+    map_x = (center[0] + (map_x - center[0]) * distortion_factor).astype(np.float32)
+    map_y = (center[1] + (map_y - center[1]) * distortion_factor).astype(np.float32)
 
-    # 왜곡된 좌표를 계산
-    map_x[mask] = center[0] + (map_x[mask] - center[0]) * distortion_factor[mask]
-    map_y[mask] = center[1] + (map_y[mask] - center[1]) * distortion_factor[mask]
+    distorted_face = cv2.remap(frame, map_x, map_y, interpolation=cv2.INTER_LINEAR)
 
-    # 왜곡된 이미지를 생성
-    distorted_face = cv2.remap(frame, map_x.astype(np.float32), map_y.astype(np.float32), interpolation=cv2.INTER_LINEAR)
+    # 원본과 왜곡된 부분 합성
+    frame[center[1] - radius:center[1] + radius, center[0] - radius:center[0] + radius] = distorted_face
+    return frame
 
-    # 얼굴 영역만 왜곡을 적용하기 위한 마스크 생성
-    face_mask = np.zeros_like(frame[:, :, 0], dtype=np.uint8)
-    cv2.circle(face_mask, center, radius, 255, -1)  # 얼굴 영역을 원으로 지정
 
-    face_mask_inv = cv2.bitwise_not(face_mask)  # 얼굴 마스크의 반전 버전
-
-    # 왜곡된 부분과 원본 이미지를 합성
-    distorted_face_blurred = cv2.bitwise_and(distorted_face, distorted_face, mask=face_mask)  # 왜곡된 부분
-    original_face = cv2.bitwise_and(frame, frame, mask=face_mask_inv)  # 원본 이미지에서 왜곡된 부분 제외
-
-    return cv2.add(distorted_face_blurred, original_face)  # 두 이미지를 합성하여 최종 결과 반환
