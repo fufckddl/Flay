@@ -1,0 +1,6 @@
+numpy
+opencv-python-headless
+opencv-contrib-python-headless
+PyQt5
+dlib
+mediapipe==0.10.14
