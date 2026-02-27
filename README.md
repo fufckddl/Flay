@@ -32,7 +32,7 @@
 | GUI | PyQt5 |
 | 영상 처리 | OpenCV (cv2) |
 | 얼굴 검출·랜드마크 | dlib (68점 랜드마크) |
-| 배경 분할 | MediaPipe Selfie Segmentation |
+| 배경 분할 | MediaPipe (Legacy Selfie Segmentation 또는 0.10+ Tasks ImageSegmenter) |
 | 언어 | Python 3 |
 
 ---
@@ -42,10 +42,10 @@
 ```
 Flay/
 ├── main.py           # 앱 진입점, PyQt5 윈도우·캠·UI 이벤트
-├── loadPredictor.py  # dlib 얼굴 검출기/예측기, MediaPipe 세그멘테이션 초기화
+├── loadPredictor.py  # dlib 얼굴 검출/랜드마크, get_person_mask (Legacy 또는 Tasks API)
 ├── loadImages.py     # 필터용 이미지 로드 (귀, 코, 말풍선, 오버레이 등)
 ├── loadBackground.py # 가상 배경 이미지 로드 (beach.jpg)
-├── background.py     # 배경 블러·가상 배경 적용 (MediaPipe 마스크 활용)
+├── background.py     # 배경 블러·가상 배경 적용 (get_person_mask 마스크 활용)
 ├── overlays.py       # 귀/코/말풍선 오버레이, 피쉬아이 필터, 랜드마크 스무딩
 ├── utils.py          # 필터 모드별 적용 로직 (apply_filter_mode 등)
 ├── save.py           # 캡처 이미지 저장 (타임스탬프 파일명)
@@ -56,6 +56,8 @@ Flay/
 │   ├── handsome.png (선택)
 │   └── beach.jpg     # 가상 배경
 ├── savePictures/     # 캡처 저장 폴더 (실행 시 생성 가능)
+├── models/           # MediaPipe 0.10+ 배경 분할용 (선택, 없으면 첫 실행 시 자동 다운로드)
+│   └── selfie_multiclass_256x256.tflite
 └── shape_predictor_68_face_landmarks.dat  # dlib 랜드마크 모델 (별도 다운로드)
 ```
 
@@ -88,17 +90,25 @@ pip install opencv-python PyQt5 dlib mediapipe numpy
 | `gym.png` | Work out 오버레이 |
 | `beach.jpg` | 가상 배경 (Beach 모드) |
 
-### 4. 실행
+### 4. 배경 분할 모델 (Blur / Beach용)
+
+- **MediaPipe 0.9 이하**: Legacy `mp.solutions.selfie_segmentation` 사용 → 별도 설정 없음.
+- **MediaPipe 0.10+**: `models/` 폴더에 selfie 세그멘터 모델이 없으면 **첫 실행 시 자동 다운로드**됩니다.  
+  네트워크/SSL 오류 시 아래 파일을 수동으로 넣어도 됩니다.
+  - `models/selfie_multiclass_256x256.tflite`  
+  - [다운로드](https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite)
+
+### 5. 실행
 
 ```bash
 python main.py
 ```
 
-- 웹캠은 기본적으로 `cv2.VideoCapture(1)` 사용. 카메라 인덱스가 다르면 `main.py` 19번 줄에서 `0` 등으로 변경하세요.
+- 웹캠은 기본 `cv2.VideoCapture(0)` 사용. 다른 카메라를 쓰려면 `main.py`에서 인덱스를 변경하세요.
 
 ---
 
 ## 요약
 
 - **Flay**는 웹캠 입력에 실시간으로 얼굴 필터(귀/코/피쉬아이/오버레이)와 배경 효과(블러/가상 배경)를 적용하는 **Python + OpenCV + PyQt5** 필터 카메라 앱입니다.
-- 얼굴 검출·랜드마크는 **dlib**, 배경 분할은 **MediaPipe**로 처리하며, 캡처한 화면은 `savePictures/`에 저장됩니다.
+- 얼굴 검출·랜드마크는 **dlib**, 배경 분할은 **MediaPipe**(Legacy 또는 0.10+ Tasks API)로 처리하며, 캡처한 화면은 `savePictures/`에 저장됩니다.
