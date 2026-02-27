@@ -17,7 +17,7 @@ class VideoWindow(QMainWindow):
         self.init_ui()
 
         # 비디오 캡처 초기화
-        self.cap = cv2.VideoCapture(1)
+        self.cap = cv2.VideoCapture(0)
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(20)
